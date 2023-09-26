@@ -368,6 +368,31 @@ EOF
 
 }
 
+submit_final_status() {
+    # A helper script to post the status of final build to teuthology api
+    # 'state' can be either 'failed' or 'completed'
+    state=$1
+    project=$2
+    distro=$3
+    distro_version=$4
+    cat > $WORKSPACE/final_build_status.json << EOF
+{
+    "url":"$BUILD_URL",
+    "status":"$state",
+    "distro":"$distro",
+    "distro_version":"$distro_version",
+    "ref":"$BRANCH",
+    "sha1":"$SHA1",
+    "flavor":"$FLAVOR"
+}
+EOF
+
+    TEUTHOLOGY_API_URL="host.docker.internal:8082/auto-schedule/webhook/build-status"
+    # post the build information as JSON to teuthology-api
+    curl -X "POST" -H "Content-Type:application/json" --data "@$WORKSPACE/final_build_status.json" ${TEUTHOLOGY_API_URL}
+
+
+}
 
 update_build_status() {
     # A proxy script to PUT (create or update) the status of a build
@@ -385,6 +410,11 @@ update_build_status() {
     distro_arch=$5
 
     submit_build_status "POST" $state $project $distro $distro_version $distro_arch
+
+    if [ "$state" == "complete" ] || [ "$state" == "failed" ]; then
+        submit_final_status $state $project $distro $distro_version
+    fi
+
 }
 
 
@@ -404,6 +434,7 @@ failed_build_status() {
     distro_arch=$4
 
     submit_build_status "POST" $state $project $distro $distro_version $distro_arch
+    submit_final_status $state $project $distro $distro_version
 }
 
 
